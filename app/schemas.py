@@ -119,3 +119,26 @@ class CategoryListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class UserCreate(BaseModel):
+    """Schema for registering a user."""
+
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserResponse(BaseModel):
+    """Schema for user responses (never includes password)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+
+
+class Token(BaseModel):
+    """OAuth2 access token response."""
+
+    access_token: str
+    token_type: str = "bearer"

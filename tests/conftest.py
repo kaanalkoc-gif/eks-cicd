@@ -12,9 +12,8 @@ from fastapi.testclient import TestClient
 
 from alembic import command
 from alembic.config import Config
-from app.config import get_settings
 from app.database import SessionLocal
-from app.models import Category, Item
+from app.models import Category, Item, User
 from main import app
 
 
@@ -33,6 +32,7 @@ def reset_db():
     try:
         db.query(Item).delete()
         db.query(Category).delete()
+        db.query(User).delete()
         db.commit()
     finally:
         db.close()
@@ -46,9 +46,26 @@ def client():
 
 
 @pytest.fixture
-def auth_headers():
-    """Valid API key headers for protected endpoints."""
-    return {"X-API-Key": get_settings().api_key}
+def registered_user(client) -> dict[str, Any]:
+    """Register a test user via POST /auth/register."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "test@example.com", "password": "secret123"},
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.fixture
+def auth_headers(client, registered_user) -> dict[str, str]:
+    """Valid JWT Bearer headers for protected endpoints."""
+    response = client.post(
+        "/auth/login",
+        data={"username": "test@example.com", "password": "secret123"},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

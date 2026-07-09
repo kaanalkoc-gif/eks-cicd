@@ -32,3 +32,13 @@ class Item(Base):
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
 
     category = relationship("Category", back_populates="items")
+
+
+class User(Base):
+    """User table: id, email, hashed_password."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=False)

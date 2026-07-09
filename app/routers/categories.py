@@ -5,8 +5,9 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth import verify_api_key
+from app.auth import get_current_user
 from app.database import get_db
+from app.models import User
 from app.schemas import CategoryCreate, CategoryListResponse, CategoryResponse, CategoryUpdate
 from app.services import CategoryService
 
@@ -42,9 +43,9 @@ def get_category(category_id: int, db: Session = Depends(get_db)):
 def create_category(
     category: CategoryCreate,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create a new category (requires API key authentication)."""
+    """Create a new category (requires JWT authentication)."""
     row = CategoryService.create(db, category)
     return CategoryResponse.model_validate(row)
 
@@ -54,9 +55,9 @@ def update_category(
     category_id: int,
     category: CategoryUpdate,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update a category (requires API key authentication)."""
+    """Update a category (requires JWT authentication)."""
     row = CategoryService.update(db, category_id, category)
     return CategoryResponse.model_validate(row)
 
@@ -65,9 +66,9 @@ def update_category(
 def delete_category(
     category_id: int,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a category when no items reference it (requires API key)."""
+    """Delete a category when no items reference it (requires JWT)."""
     CategoryService.delete(db, category_id)
     logger.info("Deleted category id=%s", category_id)
     return None

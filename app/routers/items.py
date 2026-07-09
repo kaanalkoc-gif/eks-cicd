@@ -6,8 +6,9 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth import verify_api_key
+from app.auth import get_current_user
 from app.database import get_db
+from app.models import User
 from app.schemas import (
     ItemCreate,
     ItemListFilters,
@@ -66,9 +67,9 @@ def get_item(item_id: int, db: Session = Depends(get_db)):
 def create_item(
     item: ItemCreate,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create a new item (requires API key authentication)."""
+    """Create a new item (requires JWT authentication)."""
     row = ItemService.create(db, item)
     return ItemResponse.model_validate(row)
 
@@ -78,9 +79,9 @@ def update_item(
     item_id: int,
     item: ItemUpdate,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update an item (requires API key authentication)."""
+    """Update an item (requires JWT authentication)."""
     row = ItemService.update(db, item_id, item)
     return ItemResponse.model_validate(row)
 
@@ -89,9 +90,9 @@ def update_item(
 def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete an item (requires API key authentication)."""
+    """Delete an item (requires JWT authentication)."""
     ItemService.delete(db, item_id)
     logger.info("Deleted item id=%s", item_id)
     return None

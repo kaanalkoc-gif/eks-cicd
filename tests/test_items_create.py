@@ -52,8 +52,8 @@ def test_create_item_with_invalid_category_id(client, auth_headers):
     assert response.json()["code"] == "CATEGORY_NOT_FOUND"
 
 
-def test_create_item_without_api_key(client):
-    """POST /items returns 401 when API key is missing."""
+def test_create_item_without_auth(client):
+    """POST /items returns 401 when JWT is missing."""
     response = client.post("/items", json={"name": "Thing", "price": 5.0})
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid or missing API key"
+    assert response.json()["detail"] == "Not authenticated"

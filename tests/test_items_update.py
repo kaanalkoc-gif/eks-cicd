@@ -55,8 +55,8 @@ def test_update_item_not_found(client, auth_headers):
     assert response.json()["detail"] == "Item not found"
 
 
-def test_update_item_without_api_key(client, sample_item):
-    """PATCH /items/{item_id} returns 401 when API key is missing."""
+def test_update_item_without_auth(client, sample_item):
+    """PATCH /items/{item_id} returns 401 when JWT is missing."""
     response = client.patch(f"/items/{sample_item['id']}", json={"name": "Nope"})
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid or missing API key"
+    assert response.json()["detail"] == "Not authenticated"

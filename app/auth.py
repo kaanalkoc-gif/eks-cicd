@@ -1,27 +1,42 @@
 """
-Simple API key authentication.
-Uses a static API key from environment variable API_KEY (default: 'dev-key-123').
+JWT authentication dependencies.
+Replaces static API key auth on write endpoints (Step 22).
 """
 
-import secrets
-
 from fastapi import Depends, HTTPException, status
-from fastapi.security import APIKeyHeader
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.database import get_db
+from app.models import User
+from app.security import decode_access_token
+from app.services import UserService
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-def verify_api_key(x_api_key: str | None = Depends(api_key_header)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
     """
-    Dependency that verifies the API key from the X-API-Key header.
-    Raises 401 if the key is missing or invalid.
+    Dependency that validates a Bearer JWT and returns the current user.
+    Raises 401 if the token is missing, invalid, or the user no longer exists.
     """
-    api_key = get_settings().api_key
-    if x_api_key is None or not secrets.compare_digest(x_api_key, api_key):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key",
-        )
-    return x_api_key
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = decode_access_token(token)
+        email = payload.get("sub")
+        if not isinstance(email, str) or not email:
+            raise credentials_exception
+    except ValueError:
+        raise credentials_exception from None
+
+    user = UserService.get_by_email(db, email)
+    if user is None:
+        raise credentials_exception
+    return user

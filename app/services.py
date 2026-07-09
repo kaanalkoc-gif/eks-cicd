@@ -12,15 +12,18 @@ from app.exceptions import (
     CategoryNameExistsError,
     CategoryNotFoundError,
     ItemNotFoundError,
+    UserEmailExistsError,
 )
-from app.models import Category, Item
+from app.models import Category, Item, User
 from app.schemas import (
     CategoryCreate,
     CategoryUpdate,
     ItemCreate,
     ItemListFilters,
     ItemUpdate,
+    UserCreate,
 )
+from app.security import hash_password, verify_password
 
 
 class CategoryService:
@@ -221,3 +224,31 @@ class ItemService:
     def check_database(db: Session) -> None:
         """Verify database connectivity; raises on failure."""
         db.execute(select(1))
+
+
+class UserService:
+    """Service class for user registration and authentication."""
+
+    @staticmethod
+    def get_by_email(db: Session, email: str) -> User | None:
+        """Return a user by email, or None if not found."""
+        return db.query(User).filter(User.email == email).first()
+
+    @staticmethod
+    def create(db: Session, user: UserCreate) -> User:
+        """Register a new user with a hashed password."""
+        if UserService.get_by_email(db, user.email) is not None:
+            raise UserEmailExistsError(user.email)
+        row = User(email=user.email, hashed_password=hash_password(user.password))
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def authenticate(db: Session, email: str, password: str) -> User | None:
+        """Return the user when email/password are valid, otherwise None."""
+        user = UserService.get_by_email(db, email)
+        if user is None or not verify_password(password, user.hashed_password):
+            return None
+        return user

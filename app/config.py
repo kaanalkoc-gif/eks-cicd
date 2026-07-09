@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     api_key: str = "dev-key-123"
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:8000"
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60
 
     @computed_field
     @property

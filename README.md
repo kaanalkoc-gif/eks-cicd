@@ -24,6 +24,7 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite, and 
 16. **Pagination metadata** on list endpoints (`{ items, total, skip, limit }`) (Step 20)
 17. **Extended item stats** with per-category breakdown (Step 20.3 capstone)
 18. **CategoryService unit tests** (`tests/test_category_service.py`) (Step 21.1)
+19. **JWT authentication** – register, login, Bearer tokens on write endpoints (Step 22)
 
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
@@ -51,7 +52,8 @@ By the end, you can start the API with a single command and edit code while it r
 18. [Categories, filtering, and relationships](#19-categories-filtering-and-relationships)
 19. [Pagination metadata](#20-pagination-metadata)
 20. [Next Steps for Learning FastAPI](#21-next-steps-for-learning-fastapi)
-21. [Quick Reference](#22-quick-reference)
+21. [JWT authentication](#22-jwt-authentication)
+22. [Quick Reference](#23-quick-reference)
 
 ---
 
@@ -87,7 +89,7 @@ pytest tests/ -v --cov=app
 
 Then open:
 - **http://localhost:8000** – API
-- **http://localhost:8000/docs** – Interactive API docs (click **Authorize** to set `X-API-Key` for POST/PATCH/DELETE)
+- **http://localhost:8000/docs** – Interactive API docs (register + login, then **Authorize** with `Bearer <token>` for POST/PATCH/DELETE)
 
 **Note:** The app works with defaults (`API_KEY=dev-key-123`, `DATABASE_URL=sqlite:///./app.db`), but you can customize them in `.env`. See `.env.example` for available variables. Docker Compose loads `.env` automatically via `env_file`.
 
@@ -104,11 +106,14 @@ fastAPI-101/
 │   ├── database.py      # SQLAlchemy engine, session, get_db
 │   ├── models.py        # ORM models
 │   ├── schemas.py       # Pydantic request/response schemas
-│   ├── auth.py          # API key authentication
+│   ├── security.py      # Password hashing + JWT helpers (Step 22)
+│   ├── auth.py          # JWT dependency (get_current_user)
 │   ├── services.py      # Service layer (business logic)
 │   ├── exceptions.py    # Application exceptions
 │   └── routers/         # API route modules (Step 18)
 │       ├── health.py    # GET /, GET /health
+│       ├── auth.py      # POST /auth/register, /auth/login, GET /auth/me
+│       ├── categories.py
 │       └── items.py     # /items CRUD + stats
 ├── alembic/             # Database migrations (Step 18)
 ├── alembic.ini
@@ -127,7 +132,8 @@ fastAPI-101/
     ├── test_items_*.py
     ├── test_categories_*.py
     ├── test_item_service.py
-    └── test_category_service.py
+    ├── test_category_service.py
+    └── test_auth.py
 ```
 
 ---
@@ -1829,7 +1835,7 @@ Applies to `GET /items` (with filters) and `GET /categories`.
 1. Create several items via `POST /items`
 2. `GET /items?skip=0&limit=2` — response includes `"total": N` for the full count
 3. `GET /items?category_id=1&limit=5` — `total` reflects filtered count, not just the page size
-4. Run tests: `pytest tests/ -v` (61 tests)
+4. Run tests: `pytest tests/ -v` (67 tests)
 
 ### 20.3 Extend item stats summary (capstone)
 
@@ -1903,19 +1909,181 @@ Run: `pytest tests/test_category_service.py -v`
 
 ---
 
-Further extensions now that filtering, categories, pagination metadata, extended item stats, and service unit tests are in place:
+Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, and JWT auth are in place:
 
-1. **JWT authentication** – Replace static API key with JWT tokens for user-based auth.
-2. **Rate limiting** – Limit requests per IP or API key to prevent abuse.
-3. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
-4. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
-5. **Pagination `meta` object** – Refactor list responses to `{ "data": [...], "meta": { ... } }` (Laravel-style).
+1. **Rate limiting** – Limit requests per IP or user to prevent abuse.
+2. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
+3. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
+4. **Pagination `meta` object** – Refactor list responses to `{ "data": [...], "meta": { ... } }` (Laravel-style).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 
 ---
 
-## 22. Quick Reference
+## 22. JWT authentication
+
+This step replaces the static **API key** (Step 13) with **JWT Bearer tokens** for write endpoints. You'll add a `User` model, password hashing, login/register routes, and a `get_current_user` dependency — the FastAPI equivalent of Laravel Sanctum token auth.
+
+| Laravel | FastAPI (this step) |
+|---------|---------------------|
+| `User` model + `Hash::make()` | `User` model + `bcrypt` in `security.py` |
+| `Auth::attempt()` | `UserService.authenticate()` |
+| Sanctum personal access token | JWT signed with `JWT_SECRET` |
+| `Authorization: Bearer {token}` | `OAuth2PasswordBearer` + `get_current_user` |
+| `auth:sanctum` middleware | `Depends(get_current_user)` on write routes |
+
+Work through the files in order below. After each step, run tests or try the endpoint in `/docs`.
+
+### 22.1 Add dependencies
+
+Add to **`requirements.txt`**:
+
+```
+bcrypt==4.2.1
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.20
+```
+
+- **`bcrypt`** – password hashing (never store plain passwords)
+- **`python-jose`** – create and verify JWTs
+- **`python-multipart`** – required for OAuth2 login form (`username` + `password`)
+
+Install: `pip install -r requirements.txt`
+
+### 22.2 Add JWT settings
+
+Add to **`app/config.py`** and **`.env.example`**:
+
+```python
+jwt_secret: str = "change-me-in-production"
+jwt_algorithm: str = "HS256"
+jwt_expire_minutes: int = 60
+```
+
+Set a strong `JWT_SECRET` in production (like `APP_KEY` in Laravel).
+
+### 22.3 Create `app/security.py`
+
+New file for password hashing and JWT helpers:
+
+- `hash_password()` / `verify_password()` – bcrypt
+- `create_access_token(subject)` – encode JWT with `sub` = user email
+- `decode_access_token(token)` – validate signature and expiry
+
+### 22.4 Add the `User` model
+
+Add to **`app/models.py`**:
+
+```python
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=False)
+```
+
+Create migration **`alembic/versions/003_add_users_table.py`**, then restart the app (migrations run on startup).
+
+### 22.5 Add user schemas
+
+Add to **`app/schemas.py`**:
+
+- `UserCreate` – `email`, `password` (min 8 chars)
+- `UserResponse` – `id`, `email` (never return password)
+- `Token` – `access_token`, `token_type: "bearer"`
+
+Add **`UserEmailExistsError`** to `app/exceptions.py` and a 409 handler in `app/main.py`.
+
+### 22.6 Add `UserService`
+
+Add to **`app/services.py`**:
+
+| Method | Purpose |
+|--------|---------|
+| `get_by_email()` | Lookup for login and token validation |
+| `create()` | Hash password, persist user |
+| `authenticate()` | Verify email + password, return user or `None` |
+
+### 22.7 Replace API key auth with JWT dependency
+
+Rewrite **`app/auth.py`**:
+
+```python
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    # decode JWT → load user by email → raise 401 if invalid
+```
+
+On write routes in **`app/routers/items.py`** and **`app/routers/categories.py`**, replace:
+
+```python
+api_key: str = Depends(verify_api_key)
+```
+
+with:
+
+```python
+current_user: User = Depends(get_current_user)
+```
+
+GET routes stay public.
+
+### 22.8 Create `app/routers/auth.py`
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/auth/register` | Create account (JSON body) |
+| POST | `/auth/login` | OAuth2 form → JWT (`username` field = email) |
+| GET | `/auth/me` | Current user profile (requires Bearer token) |
+
+Register the router in **`app/main.py`**: `application.include_router(auth.router)`.
+
+### 22.9 Update tests
+
+**`tests/conftest.py`** – `auth_headers` fixture now:
+
+1. `POST /auth/register`
+2. `POST /auth/login` with form data
+3. Returns `{"Authorization": "Bearer <token>"}`
+
+Add **`tests/test_auth.py`** for register, login, duplicate email, and `/auth/me`.
+
+Update existing tests that expected `"Invalid or missing API key"` — missing token now returns `"Not authenticated"` (OAuth2); invalid token returns `"Could not validate credentials"`.
+
+Run: `pytest tests/ -v` (67 tests)
+
+### 22.10 Try it in Swagger
+
+1. `POST /auth/register` with `{ "email": "you@example.com", "password": "password123" }`
+2. `POST /auth/login` — use **username** = email, **password** = your password
+3. Copy `access_token` from the response
+4. Click **Authorize** → paste `Bearer <token>` (or just the token; Swagger adds Bearer)
+5. Try `POST /items` or `POST /categories`
+
+**curl example:**
+
+```bash
+# Register
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"password123"}'
+
+# Login (note: form-urlencoded, username = email)
+curl -X POST http://localhost:8000/auth/login \
+  -d "username=you@example.com&password=password123"
+
+# Create item with token
+curl -X POST http://localhost:8000/items \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Widget","price":9.99}'
+```
+
+---
+
+## 23. Quick Reference
 
 | Goal | Command |
 |------|---------|
@@ -1936,4 +2104,4 @@ The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo
 
 ---
 
-You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it, how to add a persistent database, tests, CI/CD, authentication, production best practices, mature app structure, production layout with migrations, categories and filtering, and pagination metadata. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.
+You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it, how to add a persistent database, tests, CI/CD, authentication (API key then JWT), production best practices, mature app structure, production layout with migrations, categories and filtering, pagination metadata, and service-layer tests. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.

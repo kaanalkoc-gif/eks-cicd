@@ -15,8 +15,8 @@ def test_create_category(client, auth_headers):
     assert data["description"] == "Hand tools"
 
 
-def test_create_category_without_api_key(client):
-    """POST /categories returns 401 when API key is missing."""
+def test_create_category_without_auth(client):
+    """POST /categories returns 401 when JWT is missing."""
     response = client.post("/categories", json={"name": "Tools"})
     assert response.status_code == 401
 

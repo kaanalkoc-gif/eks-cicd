@@ -31,3 +31,11 @@ class CategoryNameExistsError(Exception):
     def __init__(self, name: str) -> None:
         self.name = name
         super().__init__(f"Category name '{name}' already exists")
+
+
+class UserEmailExistsError(Exception):
+    """Raised when a user email is already registered."""
+
+    def __init__(self, email: str) -> None:
+        self.email = email
+        super().__init__(f"User email '{email}' already exists")

@@ -19,8 +19,9 @@ from app.exceptions import (
     CategoryNameExistsError,
     CategoryNotFoundError,
     ItemNotFoundError,
+    UserEmailExistsError,
 )
-from app.routers import categories, health, items
+from app.routers import auth, categories, health, items
 
 logger = logging.getLogger("app")
 
@@ -133,6 +134,17 @@ def create_app() -> FastAPI:
             },
         )
 
+    @application.exception_handler(UserEmailExistsError)
+    async def user_email_exists_handler(request: Request, exc: UserEmailExistsError):
+        """Return 409 when a user email is already registered."""
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": f"User email '{exc.email}' already exists",
+                "code": "USER_EMAIL_EXISTS",
+            },
+        )
+
     @application.exception_handler(SQLAlchemyError)
     async def database_error_handler(request: Request, exc: SQLAlchemyError):
         """Return consistent 500 for database errors."""
@@ -143,6 +155,7 @@ def create_app() -> FastAPI:
         )
 
     application.include_router(health.router)
+    application.include_router(auth.router)
     application.include_router(categories.router)
     application.include_router(items.router)
 
