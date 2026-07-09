@@ -22,6 +22,7 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite, and 
 14. **Production structure** (`app/` package, APIRouter, Alembic migrations, CORS, auth on writes) (Step 18)
 15. **Categories, filtering, and relationships** (Category CRUD, item query filters, startup migrations) (Step 19)
 16. **Pagination metadata** on list endpoints (`{ items, total, skip, limit }`) (Step 20)
+17. **Extended item stats** with per-category breakdown (Step 20.3 capstone)
 
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
@@ -1254,7 +1255,7 @@ COPY main.py database.py models.py auth.py services.py .
 1. Start the app: `docker compose up --build` or `uvicorn main:app --reload`.
 2. Create some items via **POST /items**.
 3. Call **GET /items/stats/summary** – you'll get statistics about all items.
-4. Check the response: `{"total_items": 3, "average_price": 20.0, "min_price": 10.0, "max_price": 30.0}`
+4. Check the response: `{"total_items": 3, "average_price": 20.0, "min_price": 10.0, "max_price": 30.0}` (extended with per-category breakdown in [Step 20.3](#203-extend-item-stats-summary-capstone))
 
 ### 14.6 Benefits of this pattern
 
@@ -1825,19 +1826,72 @@ Applies to `GET /items` (with filters) and `GET /categories`.
 1. Create several items via `POST /items`
 2. `GET /items?skip=0&limit=2` — response includes `"total": N` for the full count
 3. `GET /items?category_id=1&limit=5` — `total` reflects filtered count, not just the page size
-4. Run tests: `pytest tests/ -v` (50 tests)
+4. Run tests: `pytest tests/ -v` (52 tests)
+
+### 20.3 Extend item stats summary (capstone)
+
+After categories exist (Step 19), extend **GET /items/stats/summary** with a per-category breakdown. This is a good capstone exercise: service-layer SQL, response schemas, and tests.
+
+**New response fields:**
+
+| Field | Purpose |
+|-------|---------|
+| `uncategorized_count` | Items with no `category_id` |
+| `by_category` | Per-category `item_count` and `average_price` (sorted by category name) |
+
+**Example response:**
+
+```json
+{
+  "total_items": 4,
+  "average_price": 15.0,
+  "min_price": 5.0,
+  "max_price": 30.0,
+  "uncategorized_count": 1,
+  "by_category": [
+    {
+      "category_id": 2,
+      "category_name": "Books",
+      "item_count": 1,
+      "average_price": 15.0
+    },
+    {
+      "category_id": 1,
+      "category_name": "Tools",
+      "item_count": 2,
+      "average_price": 20.0
+    }
+  ]
+}
+```
+
+**What to update:**
+
+1. **`app/schemas.py`** – add `CategoryItemStats`; extend `ItemStatsResponse`
+2. **`app/services.py`** – extend `ItemService.get_stats()` with a grouped SQLAlchemy query (`JOIN` + `GROUP BY`)
+3. **`tests/test_items_stats.py`** – integration test with categories
+4. **`tests/test_item_service.py`** – unit test for the service method
+
+**TDD order:** write a failing test in `tests/test_items_stats.py`, then implement schema + service changes until green.
+
+**Try it:**
+
+1. Create categories and items (some with `category_id`, some without)
+2. `GET /items/stats/summary` — confirm `by_category` and `uncategorized_count`
+3. `pytest tests/test_items_stats.py -v`
 
 ---
 
 ## 21. Next Steps for Learning FastAPI
 
-Now that you have filtering, categories, and pagination metadata in place, you can extend the app further:
+Now that you have filtering, categories, pagination metadata, and extended item stats in place, you can extend the app further:
 
 1. **JWT authentication** – Replace static API key with JWT tokens for user-based auth.
 2. **`test_category_service.py`** – Unit tests for `CategoryService` (like `test_item_service.py`).
 3. **Rate limiting** – Limit requests per IP or API key to prevent abuse.
 4. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
 5. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
+6. **Pagination `meta` object** – Refactor list responses to `{ "data": [...], "meta": { ... } }` (Laravel-style).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 

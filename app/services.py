@@ -175,17 +175,46 @@ class ItemService:
                 "average_price": Decimal("0.00"),
                 "min_price": None,
                 "max_price": None,
+                "uncategorized_count": 0,
+                "by_category": [],
             }
 
         avg_price = db.query(func.avg(Item.price)).scalar()
         min_price = db.query(func.min(Item.price)).scalar()
         max_price = db.query(func.max(Item.price)).scalar()
+        uncategorized_count = (
+            db.query(func.count(Item.id)).filter(Item.category_id.is_(None)).scalar()
+        )
+
+        category_rows = (
+            db.query(
+                Category.id,
+                Category.name,
+                func.count(Item.id),
+                func.avg(Item.price),
+            )
+            .join(Item, Item.category_id == Category.id)
+            .group_by(Category.id, Category.name)
+            .order_by(Category.name)
+            .all()
+        )
+        by_category = [
+            {
+                "category_id": category_id,
+                "category_name": category_name,
+                "item_count": item_count,
+                "average_price": Decimal(str(round(float(average_price), 2))),
+            }
+            for category_id, category_name, item_count, average_price in category_rows
+        ]
 
         return {
             "total_items": count,
             "average_price": Decimal(str(round(float(avg_price), 2))),
             "min_price": Decimal(str(min_price)),
             "max_price": Decimal(str(max_price)),
+            "uncategorized_count": uncategorized_count,
+            "by_category": by_category,
         }
 
     @staticmethod

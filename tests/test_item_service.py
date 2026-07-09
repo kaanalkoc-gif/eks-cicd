@@ -53,7 +53,29 @@ def test_get_stats_empty(db):
         "average_price": Decimal("0.00"),
         "min_price": None,
         "max_price": None,
+        "uncategorized_count": 0,
+        "by_category": [],
     }
+
+
+def test_get_stats_by_category(db):
+    """get_stats returns per-category counts and average prices."""
+    tools = CategoryService.create(db, CategoryCreate(name="Tools"))
+    books = CategoryService.create(db, CategoryCreate(name="Books"))
+    ItemService.create(db, ItemCreate(name="Hammer", price=Decimal("10.00"), category_id=tools.id))
+    ItemService.create(db, ItemCreate(name="Drill", price=Decimal("30.00"), category_id=tools.id))
+    ItemService.create(db, ItemCreate(name="Novel", price=Decimal("15.00"), category_id=books.id))
+    ItemService.create(db, ItemCreate(name="Loose", price=Decimal("5.00")))
+
+    stats = ItemService.get_stats(db)
+    assert stats["total_items"] == 4
+    assert stats["uncategorized_count"] == 1
+    assert len(stats["by_category"]) == 2
+    assert stats["by_category"][0]["category_name"] == "Books"
+    assert stats["by_category"][0]["item_count"] == 1
+    assert stats["by_category"][1]["category_name"] == "Tools"
+    assert stats["by_category"][1]["item_count"] == 2
+    assert stats["by_category"][1]["average_price"] == Decimal("20.00")
 
 
 def test_update_partial(db, sample_item):

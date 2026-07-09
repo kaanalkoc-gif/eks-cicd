@@ -66,6 +66,19 @@ class ItemResponse(BaseModel):
         return float(price)
 
 
+class CategoryItemStats(BaseModel):
+    """Item statistics grouped by category."""
+
+    category_id: int
+    category_name: str
+    item_count: int
+    average_price: Decimal
+
+    @field_serializer("average_price")
+    def serialize_average_price(self, value: Decimal) -> float:
+        return float(value)
+
+
 class ItemStatsResponse(BaseModel):
     """Schema for item statistics summary."""
 
@@ -73,6 +86,8 @@ class ItemStatsResponse(BaseModel):
     average_price: Decimal
     min_price: Decimal | None
     max_price: Decimal | None
+    uncategorized_count: int
+    by_category: list[CategoryItemStats]
 
     @field_serializer("average_price", "min_price", "max_price")
     def serialize_prices(self, value: Decimal | None) -> float | None:
