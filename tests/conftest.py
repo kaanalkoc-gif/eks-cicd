@@ -15,6 +15,19 @@ from alembic.config import Config
 from app.database import SessionLocal
 from app.models import Category, Item, User
 from main import app
+from app.rate_limit import limiter
+
+
+@pytest.fixture(autouse=True)
+def disable_rate_limiter(request):
+    """Disable rate limits for all tests except those marked @pytest.mark.rate_limit."""
+    if request.node.get_closest_marker("rate_limit"):
+        yield
+        return
+    previous = limiter.enabled
+    limiter.enabled = False
+    yield
+    limiter.enabled = previous
 
 
 @pytest.fixture(scope="session", autouse=True)

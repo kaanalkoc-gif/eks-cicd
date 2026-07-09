@@ -14,4 +14,7 @@ bcrypt==4.2.1
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.20
 
+# Rate limiting
+slowapi==0.1.9
+
 # Pydantic is a dependency of FastAPI

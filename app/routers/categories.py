@@ -2,12 +2,13 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
+from app.rate_limit import limiter
 from app.schemas import CategoryCreate, CategoryListResponse, CategoryResponse, CategoryUpdate
 from app.services import CategoryService
 
@@ -40,7 +41,9 @@ def get_category(category_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=CategoryResponse, status_code=201)
+@limiter.limit("60/minute")
 def create_category(
+    request: Request,
     category: CategoryCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -51,7 +54,9 @@ def create_category(
 
 
 @router.patch("/{category_id}", response_model=CategoryResponse)
+@limiter.limit("60/minute")
 def update_category(
+    request: Request,
     category_id: int,
     category: CategoryUpdate,
     db: Session = Depends(get_db),
@@ -63,7 +68,9 @@ def update_category(
 
 
 @router.delete("/{category_id}", status_code=204)
+@limiter.limit("60/minute")
 def delete_category(
+    request: Request,
     category_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

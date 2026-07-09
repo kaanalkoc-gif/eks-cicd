@@ -13,6 +13,8 @@ from fastapi.openapi.docs import get_redoc_html
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from slowapi.errors import RateLimitExceeded
+
 from app.config import get_settings
 from app.exceptions import (
     CategoryInUseError,
@@ -22,6 +24,7 @@ from app.exceptions import (
     UserEmailExistsError,
 )
 from app.routers import auth, categories, health, items
+from app.rate_limit import limiter
 
 logger = logging.getLogger("app")
 
@@ -79,6 +82,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    application.state.limiter = limiter
+
+    @application.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        """Return 429 when a client exceeds configured rate limits."""
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED"},
+        )
 
     @application.middleware("http")
     async def log_requests(request: Request, call_next):

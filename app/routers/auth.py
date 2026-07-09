@@ -1,12 +1,13 @@
 """User registration, login, and profile routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
+from app.rate_limit import limiter
 from app.schemas import Token, UserCreate, UserResponse
 from app.security import create_access_token
 from app.services import UserService
@@ -15,14 +16,17 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def register(request: Request, user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user account."""
     row = UserService.create(db, user)
     return UserResponse.model_validate(row)
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("10/minute")
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):

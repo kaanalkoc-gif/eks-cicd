@@ -25,6 +25,7 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite, and 
 17. **Extended item stats** with per-category breakdown (Step 20.3 capstone)
 18. **CategoryService unit tests** (`tests/test_category_service.py`) (Step 21.1)
 19. **JWT authentication** – register, login, Bearer tokens on write endpoints (Step 22)
+20. **Rate limiting** – IP-based limits on auth and write endpoints via slowapi (Step 23)
 
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
@@ -53,7 +54,8 @@ By the end, you can start the API with a single command and edit code while it r
 19. [Pagination metadata](#20-pagination-metadata)
 20. [Next Steps for Learning FastAPI](#21-next-steps-for-learning-fastapi)
 21. [JWT authentication](#22-jwt-authentication)
-22. [Quick Reference](#23-quick-reference)
+22. [Rate limiting](#23-rate-limiting)
+23. [Quick Reference](#24-quick-reference)
 
 ---
 
@@ -108,6 +110,7 @@ fastAPI-101/
 │   ├── schemas.py       # Pydantic request/response schemas
 │   ├── security.py      # Password hashing + JWT helpers (Step 22)
 │   ├── auth.py          # JWT dependency (get_current_user)
+│   ├── rate_limit.py    # slowapi limiter (Step 23)
 │   ├── services.py      # Service layer (business logic)
 │   ├── exceptions.py    # Application exceptions
 │   └── routers/         # API route modules (Step 18)
@@ -133,7 +136,8 @@ fastAPI-101/
     ├── test_categories_*.py
     ├── test_item_service.py
     ├── test_category_service.py
-    └── test_auth.py
+    ├── test_auth.py
+    └── test_rate_limit.py
 ```
 
 ---
@@ -1835,7 +1839,7 @@ Applies to `GET /items` (with filters) and `GET /categories`.
 1. Create several items via `POST /items`
 2. `GET /items?skip=0&limit=2` — response includes `"total": N` for the full count
 3. `GET /items?category_id=1&limit=5` — `total` reflects filtered count, not just the page size
-4. Run tests: `pytest tests/ -v` (67 tests)
+4. Run tests: `pytest tests/ -v` (70 tests)
 
 ### 20.3 Extend item stats summary (capstone)
 
@@ -1956,12 +1960,11 @@ An optional refactor — common in Laravel and many SPA APIs — nests paginatio
 
 ---
 
-Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, and JWT auth are in place:
+Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, JWT auth, and rate limiting are in place:
 
-1. **Rate limiting** – Limit requests per IP or user to prevent abuse.
-2. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
-3. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
-4. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
+1. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
+2. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
+3. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 
@@ -2099,7 +2102,7 @@ Add **`tests/test_auth.py`** for register, login, duplicate email, and `/auth/me
 
 Update existing tests that expected `"Invalid or missing API key"` — missing token now returns `"Not authenticated"` (OAuth2); invalid token returns `"Could not validate credentials"`.
 
-Run: `pytest tests/ -v` (67 tests)
+Run: `pytest tests/ -v` (70 tests)
 
 ### 22.10 Try it in Swagger
 
@@ -2130,7 +2133,99 @@ curl -X POST http://localhost:8000/items \
 
 ---
 
-## 23. Quick Reference
+## 23. Rate limiting
+
+This step adds **IP-based rate limiting** with [slowapi](https://github.com/laurentS/slowapi) to protect auth and write endpoints from abuse (brute-force login, registration spam, write flooding).
+
+| Laravel | FastAPI (this step) |
+|---------|---------------------|
+| `throttle:10,1` middleware | `@limiter.limit("10/minute")` on routes |
+| `429 Too Many Requests` | `RateLimitExceeded` → custom 429 JSON |
+| Per-user or per-IP | Per-IP via `get_remote_address` |
+
+Work through the files in order below.
+
+### 23.1 Add dependency
+
+Add to **`requirements.txt`**:
+
+```
+slowapi==0.1.9
+```
+
+Install: `pip install -r requirements.txt`
+
+### 23.2 Create `app/rate_limit.py`
+
+```python
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+```
+
+- **`get_remote_address`** – keys limits by client IP (from `request.client.host`)
+- **In-memory storage** – fine for single-process dev; use Redis in multi-worker production
+
+### 23.3 Wire into `app/main.py`
+
+1. Attach limiter to app state: `application.state.limiter = limiter`
+2. Add a **429** handler for `RateLimitExceeded`:
+
+```json
+{ "detail": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED" }
+```
+
+### 23.4 Apply limits to routes
+
+slowapi requires `request: Request` in the route signature. Add `@limiter.limit(...)` above protected handlers:
+
+| Endpoint group | Limit | Why |
+|----------------|-------|-----|
+| `POST /auth/register`, `POST /auth/login` | `10/minute` | Brute-force / registration spam |
+| `POST`, `PATCH`, `DELETE` on items & categories | `60/minute` | Write flooding |
+
+GET routes stay unlimited.
+
+**Example:**
+
+```python
+@router.post("/login", response_model=Token)
+@limiter.limit("10/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), ...):
+```
+
+### 23.5 Tests
+
+Most tests disable rate limiting via an autouse fixture in **`tests/conftest.py`** (`limiter.enabled = False`).
+
+**`tests/test_rate_limit.py`** uses `@pytest.mark.rate_limit` to opt in and asserts **429** after exceeding limits:
+
+- 11 login attempts → 429 on the 11th
+- 11 registrations → 429 on the 11th
+- 61 item creates → 429 on the 61st
+
+Run: `pytest tests/test_rate_limit.py -v`
+
+### 23.6 Try it
+
+Restart the server after installing `slowapi`, then hammer an endpoint:
+
+```bash
+# 11 rapid login attempts — the 11th should return 429
+for i in $(seq 1 11); do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/auth/login \
+    -d "username=nobody@example.com&password=wrong"
+done
+```
+
+Expect `401` for attempts 1–10, then `429`.
+
+**Production note:** in-memory limits are per process. With multiple uvicorn workers or containers, use Redis-backed storage (`storage_uri="redis://..."`) so all workers share counters.
+
+---
+
+## 24. Quick Reference
 
 | Goal | Command |
 |------|---------|
@@ -2151,4 +2246,4 @@ curl -X POST http://localhost:8000/items \
 
 ---
 
-You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it, how to add a persistent database, tests, CI/CD, authentication (API key then JWT), production best practices, mature app structure, production layout with migrations, categories and filtering, pagination metadata, and service-layer tests. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.
+You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it, how to add a persistent database, tests, CI/CD, authentication (API key then JWT), rate limiting, production best practices, mature app structure, production layout with migrations, categories and filtering, pagination metadata, and service-layer tests. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.

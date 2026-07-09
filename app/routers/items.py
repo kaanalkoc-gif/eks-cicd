@@ -3,12 +3,13 @@
 import logging
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
+from app.rate_limit import limiter
 from app.schemas import (
     ItemCreate,
     ItemListFilters,
@@ -64,7 +65,9 @@ def get_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ItemResponse, status_code=201)
+@limiter.limit("60/minute")
 def create_item(
+    request: Request,
     item: ItemCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -75,7 +78,9 @@ def create_item(
 
 
 @router.patch("/{item_id}", response_model=ItemResponse)
+@limiter.limit("60/minute")
 def update_item(
+    request: Request,
     item_id: int,
     item: ItemUpdate,
     db: Session = Depends(get_db),
@@ -87,7 +92,9 @@ def update_item(
 
 
 @router.delete("/{item_id}", status_code=204)
+@limiter.limit("60/minute")
 def delete_item(
+    request: Request,
     item_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

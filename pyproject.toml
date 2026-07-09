@@ -11,6 +11,9 @@ known-first-party = ["app", "main"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "rate_limit: tests that enable IP-based rate limiting",
+]
 
 [tool.coverage.run]
 source = ["app"]
