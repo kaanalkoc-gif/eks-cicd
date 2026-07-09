@@ -23,6 +23,7 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite, and 
 15. **Categories, filtering, and relationships** (Category CRUD, item query filters, startup migrations) (Step 19)
 16. **Pagination metadata** on list endpoints (`{ items, total, skip, limit }`) (Step 20)
 17. **Extended item stats** with per-category breakdown (Step 20.3 capstone)
+18. **CategoryService unit tests** (`tests/test_category_service.py`) (Step 21.1)
 
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
@@ -124,7 +125,9 @@ fastAPI-101/
     ├── conftest.py
     ├── test_app.py
     ├── test_items_*.py
-    └── test_item_service.py
+    ├── test_categories_*.py
+    ├── test_item_service.py
+    └── test_category_service.py
 ```
 
 ---
@@ -1826,7 +1829,7 @@ Applies to `GET /items` (with filters) and `GET /categories`.
 1. Create several items via `POST /items`
 2. `GET /items?skip=0&limit=2` — response includes `"total": N` for the full count
 3. `GET /items?category_id=1&limit=5` — `total` reflects filtered count, not just the page size
-4. Run tests: `pytest tests/ -v` (52 tests)
+4. Run tests: `pytest tests/ -v` (61 tests)
 
 ### 20.3 Extend item stats summary (capstone)
 
@@ -1884,14 +1887,29 @@ After categories exist (Step 19), extend **GET /items/stats/summary** with a per
 
 ## 21. Next Steps for Learning FastAPI
 
-Now that you have filtering, categories, pagination metadata, and extended item stats in place, you can extend the app further:
+### 21.1 CategoryService unit tests
+
+Add **`tests/test_category_service.py`** to test category business logic without the HTTP layer (mirrors `test_item_service.py`):
+
+| Test | Covers |
+|------|--------|
+| `get_by_id` | Happy path and `CategoryNotFoundError` |
+| `create` | Persist and `CategoryNameExistsError` |
+| `update` | Partial update and duplicate name on rename |
+| `delete` | Remove empty category and `CategoryInUseError` |
+| `list_categories` | Pagination and total count |
+
+Run: `pytest tests/test_category_service.py -v`
+
+---
+
+Further extensions now that filtering, categories, pagination metadata, extended item stats, and service unit tests are in place:
 
 1. **JWT authentication** – Replace static API key with JWT tokens for user-based auth.
-2. **`test_category_service.py`** – Unit tests for `CategoryService` (like `test_item_service.py`).
-3. **Rate limiting** – Limit requests per IP or API key to prevent abuse.
-4. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
-5. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
-6. **Pagination `meta` object** – Refactor list responses to `{ "data": [...], "meta": { ... } }` (Laravel-style).
+2. **Rate limiting** – Limit requests per IP or API key to prevent abuse.
+3. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
+4. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
+5. **Pagination `meta` object** – Refactor list responses to `{ "data": [...], "meta": { ... } }` (Laravel-style).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 
