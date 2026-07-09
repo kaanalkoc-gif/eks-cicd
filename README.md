@@ -1,6 +1,6 @@
 # Getting Fast at FastAPI
 
-A step-by-step guide to building a minimal FastAPI app with Docker, SQLite, and tests. This project demonstrates core FastAPI concepts: routing, path/query parameters, request bodies, database integration, and testing.
+A step-by-step guide to building a minimal FastAPI app with Docker, SQLite (local), PostgreSQL (Docker), and tests. This project demonstrates core FastAPI concepts: routing, path/query parameters, request bodies, database integration, and testing.
 
 ---
 
@@ -26,6 +26,7 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite, and 
 18. **CategoryService unit tests** (`tests/test_category_service.py`) (Step 21.1)
 19. **JWT authentication** – register, login, Bearer tokens on write endpoints (Step 22)
 20. **Rate limiting** – IP-based limits on auth and write endpoints via slowapi (Step 23)
+21. **PostgreSQL** – production database via Docker Compose (Step 24)
 
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
@@ -55,7 +56,8 @@ By the end, you can start the API with a single command and edit code while it r
 20. [Next Steps for Learning FastAPI](#21-next-steps-for-learning-fastapi)
 21. [JWT authentication](#22-jwt-authentication)
 22. [Rate limiting](#23-rate-limiting)
-23. [Quick Reference](#24-quick-reference)
+23. [PostgreSQL](#24-postgresql)
+24. [Quick Reference](#25-quick-reference)
 
 ---
 
@@ -93,7 +95,7 @@ Then open:
 - **http://localhost:8000** – API
 - **http://localhost:8000/docs** – Interactive API docs (register + login, then **Authorize** with `Bearer <token>` for POST/PATCH/DELETE)
 
-**Note:** The app works with defaults (`API_KEY=dev-key-123`, `DATABASE_URL=sqlite:///./app.db`), but you can customize them in `.env`. See `.env.example` for available variables. Docker Compose loads `.env` automatically via `env_file`.
+**Note:** Local Python uses **SQLite** by default (`DATABASE_URL=sqlite:///./app.db`). **Docker Compose** uses **PostgreSQL** (Step 24). See `.env.example` for variables. Docker Compose loads `.env` automatically via `env_file`.
 
 ---
 
@@ -1960,11 +1962,10 @@ An optional refactor — common in Laravel and many SPA APIs — nests paginatio
 
 ---
 
-Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, JWT auth, and rate limiting are in place:
+Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, JWT auth, rate limiting, and PostgreSQL are in place:
 
-1. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
-2. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
-3. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
+1. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
+2. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 
@@ -2225,15 +2226,241 @@ Expect `401` for attempts 1–10, then `429`.
 
 ---
 
-## 24. Quick Reference
+## 24. PostgreSQL
+
+This step adds **PostgreSQL** for Docker-based development — production parity without changing your SQLAlchemy models or Alembic migrations. Local `uvicorn` keeps **SQLite** (zero setup); `docker compose up` uses **PostgreSQL** automatically.
+
+| Laravel | FastAPI (this step) |
+|---------|---------------------|
+| `DB_CONNECTION=pgsql` in `.env` | `DATABASE_URL=postgresql+psycopg://...` |
+| `php artisan migrate` | `alembic upgrade head` (runs on startup) |
+| Separate MySQL/Postgres container | `db` service in `docker-compose.yml` |
+
+### 24.1 Why two databases?
+
+| Environment | Database | Why |
+|-------------|----------|-----|
+| Local Python (`uvicorn`) | SQLite (`app.db`) | No install, fast iteration |
+| Docker Compose | PostgreSQL | Matches production; shared server process |
+| Tests (pytest) | SQLite (`test.db`) | Fast, isolated, no Docker required |
+
+Same **`app/models.py`** and **`alembic/versions/`** work on both — SQLAlchemy abstracts the engine.
+
+### 24.2 Add the PostgreSQL driver
+
+Add to **`requirements.txt`**:
+
+```
+psycopg[binary]==3.2.3
+```
+
+Use the **`postgresql+psycopg://`** URL scheme (psycopg v3 driver for SQLAlchemy 2.0).
+
+Install: `pip install -r requirements.txt`
+
+### 24.3 Update `docker-compose.yml`
+
+Add a **`db`** service and point the API at it:
+
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fastapi
+      POSTGRES_PASSWORD: fastapi
+      POSTGRES_DB: fastapi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fastapi -d fastapi"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+psycopg://fastapi:fastapi@db:5432/fastapi
+
+volumes:
+  postgres_data:
+```
+
+Key points:
+
+- **`depends_on` + `healthcheck`** — API waits until Postgres accepts connections
+- **`DATABASE_URL` in `environment`** — overrides `.env` SQLite URL when running in Docker
+- **`postgres_data` volume** — data survives `docker compose down` (use `docker compose down -v` to wipe)
+
+### 24.4 No model changes required
+
+**`app/database.py`** already skips SQLite-only `check_same_thread` for non-SQLite URLs:
+
+```python
+connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+```
+
+Alembic reads `DATABASE_URL` from settings — the same migrations apply to both engines.
+
+### 24.5 Start Docker
+
+**Prerequisite:** Docker Desktop must be running. If you see:
+
+```
+Cannot connect to the Docker daemon at unix:///Users/mike/.docker/run/docker.sock.
+```
+
+Open **Docker Desktop** (`open -a Docker` on macOS) and wait until it reports **“Docker Desktop is running”**, then retry.
+
+```bash
+docker compose up --build
+```
+
+Stop local `uvicorn` first if it is already using port 8000.
+
+### 24.6 Expected startup logs
+
+A successful first run looks like this:
+
+```
+db-1  | ... LOG:  database system is ready to accept connections
+Container fastapi-101-db-1 Healthy
+api-1  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+api-1  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
+api-1  | INFO  [alembic.runtime.migration] Running upgrade  -> 001, Create items table
+api-1  | INFO  [alembic.runtime.migration] Running upgrade 001 -> 002, Add categories table...
+api-1  | INFO  [alembic.runtime.migration] Running upgrade 002 -> 003, Add users table
+api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+api-1  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+api-1  | ... INFO [app] Starting application
+```
+
+| Log line | Meaning |
+|----------|---------|
+| `database system is ready to accept connections` | PostgreSQL is up |
+| `Container ... db ... Healthy` | API waited for DB before starting |
+| `Context impl PostgresqlImpl` | Alembic is using **PostgreSQL** (not SQLite) |
+| `Running upgrade -> 001, 002, 003` | Migrations applied on the Postgres database |
+| `Uvicorn running on http://0.0.0.0:8000` | API is live at **http://localhost:8000** |
+| `Starting application` | App lifespan finished (migrations + logging configured) |
+
+On later runs you will **not** see `Running upgrade` again unless new migrations are added — that is normal.
+
+### 24.7 Verify PostgreSQL
+
+Work through these checks to confirm data is stored in Postgres.
+
+**1. List tables in PostgreSQL**
+
+```bash
+docker compose exec db psql -U fastapi -d fastapi -c "\dt"
+```
+
+Expect `items`, `categories`, `users`, and `alembic_version`.
+
+**2. Confirm the API container uses PostgreSQL**
+
+```bash
+docker compose exec api printenv DATABASE_URL
+```
+
+Expect: `postgresql+psycopg://fastapi:fastapi@db:5432/fastapi`
+
+**3. Exercise the API (Swagger)**
+
+1. Open **http://localhost:8000/docs**
+2. `POST /auth/register` → `{ "email": "you@example.com", "password": "password123" }`
+3. `POST /auth/login` → username = email, password = your password
+4. **Authorize** with the Bearer token
+5. `POST /items` → `{ "name": "Postgres Widget", "price": 9.99 }`
+
+**4. Confirm rows in PostgreSQL**
+
+```bash
+docker compose exec db psql -U fastapi -d fastapi -c "SELECT id, email FROM users;"
+docker compose exec db psql -U fastapi -d fastapi -c "SELECT id, name, price FROM items;"
+```
+
+You should see the user and item you just created.
+
+**5. curl smoke test (optional)**
+
+```bash
+# Health check
+curl -s http://localhost:8000/health
+
+# Register
+curl -s -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"curl@example.com","password":"password123"}'
+
+# Login and create an item (paste TOKEN from login response)
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -d "username=curl@example.com&password=password123" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -s -X POST http://localhost:8000/items \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"curl item","price":5.00}'
+```
+
+Then re-run the `SELECT` queries — row counts should increase.
+
+**6. Automated tests (still SQLite)**
+
+pytest does **not** use Docker PostgreSQL. From the project root:
+
+```bash
+pytest tests/ -v
+```
+
+Expect **70 passed**. CI and local tests keep using `sqlite:///./test.db` for speed and simplicity.
+
+**Local Python unchanged (SQLite):**
+
+```bash
+uvicorn main:app --reload   # still uses sqlite:///./app.db from .env
+```
+
+### 24.8 Tests stay on SQLite
+
+**`conftest.py`** (project root) forces `DATABASE_URL=sqlite:///./test.db` before the app loads. CI and `pytest` do not need Docker or PostgreSQL — 70 tests run as before.
+
+To test against PostgreSQL manually: set `DATABASE_URL` to the Docker URL and run `alembic upgrade head` before pytest (optional advanced exercise).
+
+### 24.9 Production notes
+
+- Use strong credentials and secrets management (not `fastapi:fastapi`)
+- Managed Postgres (RDS, Supabase, Neon) — set `DATABASE_URL` to the cloud connection string
+- Connection pooling (e.g. PgBouncer) at scale — out of scope for this learning project
+
+---
+
+## 25. Quick Reference
 
 | Goal | Command |
 |------|---------|
 | Activate virtualenv | `source .venv/bin/activate` |
-| Start app (Docker) | `docker compose up --build` |
-| Start app (local) | `source .venv/bin/activate && uvicorn main:app --reload` |
+| Start app (Docker + PostgreSQL) | `docker compose up --build` |
+| Start app (local + SQLite) | `source .venv/bin/activate && uvicorn main:app --reload` |
 | Restart local server | **Ctrl+C**, then `uvicorn main:app --reload` |
 | Stop Docker | `docker compose down` |
+| Wipe PostgreSQL data | `docker compose down -v` |
+| PostgreSQL shell | `docker compose exec db psql -U fastapi -d fastapi` |
 | Port 8000 in use | Stop the other process (see [Without Docker](#without-docker-local-python)) |
 | Start in background | `docker compose up --build -d` |
 | Rebuild after changing Dockerfile/requirements | `docker compose up --build` |
@@ -2246,4 +2473,4 @@ Expect `401` for attempts 1–10, then `429`.
 
 ---
 
-You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it, how to add a persistent database, tests, CI/CD, authentication (API key then JWT), rate limiting, production best practices, mature app structure, production layout with migrations, categories and filtering, pagination metadata, and service-layer tests. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.
+You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it with PostgreSQL, how to add a persistent database (SQLite locally, PostgreSQL in Docker), tests, CI/CD, authentication (API key then JWT), rate limiting, production best practices, mature app structure, production layout with migrations, categories and filtering, pagination metadata, and service-layer tests. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.

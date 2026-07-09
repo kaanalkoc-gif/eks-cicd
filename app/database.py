@@ -1,6 +1,7 @@
 """
 Database connection and session management.
-Uses SQLite by default; set DATABASE_URL for a different backend.
+Uses SQLite by default for local dev; Docker Compose uses PostgreSQL.
+Set DATABASE_URL to switch backends (same models and Alembic migrations).
 """
 
 from sqlalchemy import create_engine
