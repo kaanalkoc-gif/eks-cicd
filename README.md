@@ -1909,12 +1909,59 @@ Run: `pytest tests/test_category_service.py -v`
 
 ---
 
+### 21.2 Pagination `meta` object (optional)
+
+The app currently uses a **flat** paginated response (Step 20):
+
+```json
+{
+  "items": [ ... ],
+  "total": 42,
+  "skip": 0,
+  "limit": 10
+}
+```
+
+An optional refactor — common in Laravel and many SPA APIs — nests pagination under **`meta`** and renames the list to **`data`**:
+
+```json
+{
+  "data": [ ... ],
+  "meta": {
+    "total": 42,
+    "skip": 0,
+    "limit": 10,
+    "current_page": 1,
+    "last_page": 5
+  }
+}
+```
+
+| Laravel `paginate()` | This project (today) | Optional `meta` shape |
+|----------------------|----------------------|------------------------|
+| `data` | `items` | `data` |
+| `meta.current_page`, `meta.last_page`, etc. | `total`, `skip`, `limit` at top level | `meta` object |
+
+**Is it best practice?** It is a **widely used convention**, not a requirement. Flat `{ items, total, skip, limit }` is equally valid for a simple REST API. Choose `meta` if you want Laravel parity, a consistent envelope across list endpoints, or room to add `links` / page numbers later.
+
+**When to skip it:** Low-traffic APIs, learning projects, or when clients already consume the flat shape.
+
+**If you implement it later**, touch these files (no changes are made in the repo by default — this is documentation only):
+
+1. **`app/schemas.py`** — shared `PaginationMeta` + generic or duplicated list wrappers (`data` + `meta`)
+2. **`app/routers/items.py`** and **`app/routers/categories.py`** — build the new response shape
+3. **`tests/test_items_list.py`**, **`tests/test_categories_list.py`** — assert `data` and `meta` keys
+
+**Breaking change:** clients using `items` at the top level must switch to `data`. Update tests and README Step 20 examples together.
+
+---
+
 Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, and JWT auth are in place:
 
 1. **Rate limiting** – Limit requests per IP or user to prevent abuse.
 2. **PostgreSQL** – Switch `DATABASE_URL` to PostgreSQL for production parity.
 3. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
-4. **Pagination `meta` object** – Refactor list responses to `{ "data": [...], "meta": { ... } }` (Laravel-style).
+4. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 
