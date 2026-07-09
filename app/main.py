@@ -9,7 +9,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_redoc_html
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
@@ -27,10 +28,17 @@ logger = logging.getLogger("app")
 def configure_logging() -> None:
     """Configure application logging from settings."""
     settings = get_settings()
-    logging.basicConfig(
-        level=settings.log_level.upper(),
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    )
+    log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    log_format = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+
+    app_logger = logging.getLogger("app")
+    app_logger.disabled = False
+    app_logger.setLevel(log_level)
+    app_logger.propagate = False
+    if not app_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(log_format))
+        app_logger.addHandler(handler)
 
 
 def run_migrations() -> None:
@@ -45,8 +53,8 @@ def run_migrations() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown."""
-    configure_logging()
     run_migrations()
+    configure_logging()  # after Alembic — its fileConfig resets logging handlers
     logger.info("Starting application")
     yield
     logger.info("Shutting down application")
@@ -60,6 +68,7 @@ def create_app() -> FastAPI:
         description="A simple API to learn FastAPI basics",
         version="0.1.0",
         lifespan=lifespan,
+        redoc_url=None,
     )
 
     application.add_middleware(
@@ -88,7 +97,7 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(ItemNotFoundError)
     async def item_not_found_handler(request: Request, exc: ItemNotFoundError):
-        """Return consistent 404 for missing items."""
+        """Return a consistent 404 for missing items."""
         return JSONResponse(
             status_code=404,
             content={"detail": "Item not found", "code": "ITEM_NOT_FOUND"},
@@ -96,7 +105,7 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(CategoryNotFoundError)
     async def category_not_found_handler(request: Request, exc: CategoryNotFoundError):
-        """Return consistent 404 for missing categories."""
+        """Return a consistent 404 for missing categories."""
         return JSONResponse(
             status_code=404,
             content={"detail": "Category not found", "code": "CATEGORY_NOT_FOUND"},
@@ -136,6 +145,16 @@ def create_app() -> FastAPI:
     application.include_router(health.router)
     application.include_router(categories.router)
     application.include_router(items.router)
+
+    @application.get("/redoc", include_in_schema=False)
+    async def redoc_html() -> HTMLResponse:
+        """ReDoc with a pinned JS bundle (FastAPI's default redoc@next 404s on jsdelivr)."""
+        return get_redoc_html(
+            openapi_url=application.openapi_url,
+            title=f"{application.title} - ReDoc",
+            redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js",
+        )
+
     return application
 
 

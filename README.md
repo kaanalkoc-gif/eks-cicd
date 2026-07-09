@@ -1271,15 +1271,51 @@ COPY main.py database.py models.py auth.py services.py .
 
 This step shows how to add a new column to your database table. We'll add a `category` field to demonstrate the process.
 
-### 15.1 What you need to update
+### 15.1 Write a failing test first (TDD)
+
+If you follow **test-driven development**, start with a feature test that describes the behaviour you want. The failure tells you what to build next.
+
+**Copy-paste: add to `tests/test_items_create.py` (or a new file)**
+
+```python
+def test_create_item_with_category(client, auth_headers):
+    """POST /items accepts category and returns it in the response."""
+    response = client.post(
+        "/items",
+        headers=auth_headers,
+        json={"name": "Laptop", "price": 999.99, "category": "Electronics"},
+    )
+    assert response.status_code == 201
+    assert response.json()["category"] == "Electronics"
+```
+
+Run `pytest tests/test_items_create.py::test_create_item_with_category -v` — it should **fail** (field not implemented yet).
+
+**TDD order (red → green):**
+
+| Step | Action | Typical failure |
+|------|--------|-----------------|
+| 1 | Failing test (above) | Assertion or 422/500 |
+| 2 | Add `category` to `ItemCreate` / `ItemResponse` | 422 if schema missing field |
+| 3 | Update model + create logic to use `category` | `no such column: category` |
+| 4 | **Migration** (Alembic) or recreate dev DB | DB accepts the column |
+| 5 | Re-run test | Green |
+
+The migration is not written speculatively — you add it when code tries to persist a column that does not exist yet (or when altering an existing production database). In Laravel terms: failing Pest test → migration → model → Form Request → controller.
+
+The sections below follow the **implementation checklist** in dependency order. With TDD, you still apply them, but only after the failing test (and let each failure guide the next change).
+
+### 15.2 What you need to update
 
 When adding a new field, you need to update:
-1. **The SQLAlchemy model** (`models.py`) – defines the database column
-2. **Pydantic schemas** (`schemas.py`) – `ItemCreate` and `ItemUpdate` for request validation
-3. **The response schema** (`ItemResponse` in `schemas.py`) – includes the field in JSON responses
-4. **The create endpoint** – passes the field when creating items
+1. **A feature test** (optional but recommended) – describes the new behaviour; write it first if using TDD
+2. **The SQLAlchemy model** (`models.py`) – defines the database column
+3. **Pydantic schemas** (`schemas.py`) – `ItemCreate` and `ItemUpdate` for request validation
+4. **The response schema** (`ItemResponse` in `schemas.py`) – includes the field in JSON responses
+5. **The create endpoint** – passes the field when creating items
+6. **A migration** (production) or recreate `app.db` / `test.db` (local dev) – see 15.7
 
-### 15.2 Update the model
+### 15.3 Update the model
 
 In `models.py`, add the new column to the `Item` class:
 
@@ -1299,7 +1335,7 @@ class Item(Base):
 - **`nullable=True`** – Makes the field optional (can be `None`). **Important:** This means existing code continues to work without changes.
 - **`String(100)`** – Limits the category to 100 characters.
 
-### 15.3 Update Pydantic schemas
+### 15.4 Update Pydantic schemas
 
 **Best practice:** Extract schemas to a separate `schemas.py` file for better organization:
 
@@ -1349,7 +1385,7 @@ from schemas import ItemCreate, ItemResponse, ItemUpdate
 
 **Why separate schemas?** Keeping Pydantic models in `schemas.py` separates validation logic from route handlers, making the codebase easier to navigate and maintain.
 
-### 15.4 Update routes to use response schemas
+### 15.5 Update routes to use response schemas
 
 Return `ItemResponse` instead of a manual dict helper:
 
@@ -1372,7 +1408,7 @@ def create_item(item: ItemCreate, db: Session = Depends(get_db)):
 - **`model_config = ConfigDict(from_attributes=True)`** – Lets Pydantic read SQLAlchemy ORM objects directly.
 - **`ItemResponse.model_validate(row)`** – Converts an ORM row to a typed response (replaces a manual `item_to_dict()` helper).
 
-### 15.5 Update Dockerfile
+### 15.6 Update Dockerfile
 
 Add `schemas.py` to the COPY command:
 
@@ -1380,7 +1416,7 @@ Add `schemas.py` to the COPY command:
 COPY main.py database.py models.py auth.py services.py schemas.py .
 ```
 
-### 15.6 Important: Database schema changes
+### 15.7 Important: Database schema changes
 
 **⚠️ Important:** `Base.metadata.create_all()` (now in the lifespan hook) only creates tables if they don't exist. It **does not** alter existing tables to add new columns.
 
@@ -1395,7 +1431,7 @@ COPY main.py database.py models.py auth.py services.py schemas.py .
 
 **Why optional fields help:** By making new fields optional (`nullable=True`, `| None = None`), you can add them without breaking existing API clients or tutorial steps.
 
-### 15.7 Try it
+### 15.8 Try it
 
 1. Delete existing database files: `rm app.db test.db` (if they exist).
 2. Start the app: `docker compose up --build` or `uvicorn main:app --reload`.
