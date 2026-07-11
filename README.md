@@ -2496,6 +2496,7 @@ You've now seen how a minimal FastAPI app is structured, how dependencies are de
 | [nest-101](https://github.com/iammikek/nest-101) | 8006 | API-only | NestJS, TypeScript |
 | [express-101](https://github.com/iammikek/express-101) | 8007 | API-only | Express, Vitest |
 | [go-101](https://github.com/iammikek/go-101) | 8000* | API-only | Gin, GORM |
+| [fortran-101](https://github.com/iammikek/fortran-101) | 8008 | API-only | Fortran, fpm |
 
 \* go-101 also uses port 8000 — run one backend at a time, or change port in config.
 
