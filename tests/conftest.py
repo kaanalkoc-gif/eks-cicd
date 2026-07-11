@@ -14,8 +14,8 @@ from alembic import command
 from alembic.config import Config
 from app.database import SessionLocal
 from app.models import Category, Item, User
-from main import app
 from app.rate_limit import limiter
+from main import app
 
 
 @pytest.fixture(autouse=True)

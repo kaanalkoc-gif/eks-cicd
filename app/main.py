@@ -11,9 +11,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy.exc import SQLAlchemyError
-
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
 from app.exceptions import (
@@ -23,8 +22,8 @@ from app.exceptions import (
     ItemNotFoundError,
     UserEmailExistsError,
 )
-from app.routers import auth, categories, health, items
 from app.rate_limit import limiter
+from app.routers import auth, categories, health, items
 
 logger = logging.getLogger("app")
 
