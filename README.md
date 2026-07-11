@@ -2512,6 +2512,7 @@ You've now seen how a minimal FastAPI app is structured, how dependencies are de
 
 - **Learning the API:** fastAPI-101 (8000) + [react-101](https://github.com/iammikek/react-101) or [vue-101](https://github.com/iammikek/vue-101)
 - **Into Python monolith:** [django-101](https://github.com/iammikek/django-101) (8001) for admin + `/shop/`
+- **Compare compiled APIs:** [go-101](https://github.com/iammikek/go-101) (8000) or [fortran-101](https://github.com/iammikek/fortran-101) (8008)
 - **Compare stacks:** Run any monolith backend alongside a client from **Other clients**
 
 Catalogue: [automica.io/learning-101](https://automica.io/learning-101.html)
