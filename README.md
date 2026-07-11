@@ -28,12 +28,7 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite (loca
 20. **Rate limiting** – IP-based limits on auth and write endpoints via slowapi (Step 23)
 21. **PostgreSQL** – production database via Docker Compose (Step 24)
 
-**Related learning projects** (same catalog domain, different stack):
-
-| Project | Role | Port |
-|---------|------|------|
-| **[django-101](https://github.com/iammikek/django-101)** | Django monolith + server-rendered `/shop/` | 8001 |
-| **[react-101](https://github.com/iammikek/react-101)** | React SPA calling this API | 3000 |
+**Related learning projects:** See [§26 *-101 Family](#26--101-family) for the full catalogue (backends, clients, ports).
 
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
@@ -65,6 +60,7 @@ By the end, you can start the API with a single command and edit code while it r
 22. [Rate limiting](#23-rate-limiting)
 23. [PostgreSQL](#24-postgresql)
 24. [Quick Reference](#25-quick-reference)
+25. [*-101 Family](#26--101-family)
 
 ---
 
@@ -1971,7 +1967,7 @@ An optional refactor — common in Laravel and many SPA APIs — nests paginatio
 
 Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, JWT auth, rate limiting, and PostgreSQL are in place:
 
-1. **[react-101](https://github.com/iammikek/react-101)** – React SPA frontend for this API (filters, pagination UI, JWT auth).
+1. **[react-101](https://github.com/iammikek/react-101)** – React SPA frontend for this API (filters, pagination UI, JWT auth). See also [§26 *-101 Family](#26--101-family).
 2. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
 3. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
 
@@ -2482,3 +2478,39 @@ To test against PostgreSQL manually: set `DATABASE_URL` to the Docker URL and ru
 ---
 
 You've now seen how a minimal FastAPI app is structured, how dependencies are declared, how Docker and Docker Compose run it with PostgreSQL, how to add a persistent database (SQLite locally, PostgreSQL in Docker), tests, CI/CD, authentication (API key then JWT), rate limiting, production best practices, mature app structure, production layout with migrations, categories and filtering, pagination metadata, and service-layer tests. Use this as a reference while you work through the FastAPI docs and add more endpoints and features.
+
+---
+
+## 26. *-101 Family
+
+### API backends
+
+| Repo | Port | Type | Stack |
+|------|------|------|-------|
+| [**fastAPI-101**](https://github.com/iammikek/fastAPI-101) | **8000** | API-only | FastAPI, SQLAlchemy |
+| [django-101](https://github.com/iammikek/django-101) | 8001 | Monolith | Django + DRF + shop |
+| [symfony-101](https://github.com/iammikek/symfony-101) | 8002 | Monolith | Symfony + shop |
+| [laravel-101](https://github.com/iammikek/laravel-101) | 8003 | Monolith | Laravel + shop |
+| [framework-x-101](https://github.com/iammikek/framework-x-101) | 8004 | Monolith | Framework X + shop |
+| [orchestr-101](https://github.com/iammikek/orchestr-101) | 8005 | Monolith | Orchestr + shop |
+| [nest-101](https://github.com/iammikek/nest-101) | 8006 | API-only | NestJS, TypeScript |
+| [express-101](https://github.com/iammikek/express-101) | 8007 | API-only | Express, Vitest |
+| [go-101](https://github.com/iammikek/go-101) | 8000* | API-only | Gin, GORM |
+
+\* go-101 also uses port 8000 — run one backend at a time, or change port in config.
+
+### Other clients
+
+| Repo | Platform | Stack |
+|------|----------|-------|
+| [flutter-101](https://github.com/iammikek/flutter-101) | Mobile / desktop | Flutter (iOS, macOS, Android) |
+| [react-101](https://github.com/iammikek/react-101) | Web browser | React 19, Vite, Vitest |
+| [vue-101](https://github.com/iammikek/vue-101) | Web browser | Vue 3, Vite, Pinia |
+
+### Suggested pairing
+
+- **Learning the API:** fastAPI-101 (8000) + [react-101](https://github.com/iammikek/react-101) or [vue-101](https://github.com/iammikek/vue-101)
+- **Into Python monolith:** [django-101](https://github.com/iammikek/django-101) (8001) for admin + `/shop/`
+- **Compare stacks:** Run any monolith backend alongside a client from **Other clients**
+
+Catalogue: [automica.io/learning-101](https://automica.io/learning-101.html)
