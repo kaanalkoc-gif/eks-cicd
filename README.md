@@ -28,6 +28,13 @@ A step-by-step guide to building a minimal FastAPI app with Docker, SQLite (loca
 20. **Rate limiting** – IP-based limits on auth and write endpoints via slowapi (Step 23)
 21. **PostgreSQL** – production database via Docker Compose (Step 24)
 
+**Related learning projects** (same catalog domain, different stack):
+
+| Project | Role | Port |
+|---------|------|------|
+| **[django-101](https://github.com/iammikek/django-101)** | Django monolith + server-rendered `/shop/` | 8001 |
+| **[react-101](https://github.com/iammikek/react-101)** | React SPA calling this API | 3000 |
+
 By the end, you can start the API with a single command and edit code while it reloads automatically.
 
 ---
@@ -1964,8 +1971,9 @@ An optional refactor — common in Laravel and many SPA APIs — nests paginatio
 
 Further extensions now that filtering, categories, pagination metadata, extended item stats, service unit tests, JWT auth, rate limiting, and PostgreSQL are in place:
 
-1. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
-2. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
+1. **[react-101](https://github.com/iammikek/react-101)** – React SPA frontend for this API (filters, pagination UI, JWT auth).
+2. **Async SQLAlchemy** – Move to `async def` routes and `AsyncSession` for high concurrency.
+3. **Pagination `meta` object** – Optional refactor to `{ "data": [...], "meta": { ... } }` (see [§21.2](#212-pagination-meta-object-optional)).
 
 The official FastAPI docs are at [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) and match this style of app (async, type hints, automatic docs).
 
