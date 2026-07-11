@@ -2497,6 +2497,7 @@ You've now seen how a minimal FastAPI app is structured, how dependencies are de
 | [express-101](https://github.com/iammikek/express-101) | 8007 | API-only | Express, Vitest |
 | [go-101](https://github.com/iammikek/go-101) | 8000* | API-only | Gin, GORM |
 | [fortran-101](https://github.com/iammikek/fortran-101) | 8008 | API-only | Fortran, fpm |
+| [java-101](https://github.com/iammikek/java-101) | 8009 | API-only | Spring Boot, JPA, Flyway |
 
 \* go-101 also uses port 8000 — run one backend at a time, or change port in config.
 
@@ -2512,7 +2513,7 @@ You've now seen how a minimal FastAPI app is structured, how dependencies are de
 
 - **Learning the API:** fastAPI-101 (8000) + [react-101](https://github.com/iammikek/react-101) or [vue-101](https://github.com/iammikek/vue-101)
 - **Into Python monolith:** [django-101](https://github.com/iammikek/django-101) (8001) for admin + `/shop/`
-- **Compare compiled APIs:** [go-101](https://github.com/iammikek/go-101) (8000) or [fortran-101](https://github.com/iammikek/fortran-101) (8008)
+- **Compare compiled APIs:** [go-101](https://github.com/iammikek/go-101) (8000), [fortran-101](https://github.com/iammikek/fortran-101) (8008), or [java-101](https://github.com/iammikek/java-101) (8009)
 - **Compare stacks:** Run any monolith backend alongside a client from **Other clients**
 
 Catalogue: [automica.io/learning-101](https://automica.io/learning-101.html)
