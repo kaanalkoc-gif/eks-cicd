@@ -2498,7 +2498,7 @@ You've now seen how a minimal FastAPI app is structured, how dependencies are de
 | [go-101](https://github.com/iammikek/go-101) | 8000* | API-only | Gin, GORM |
 | [fortran-101](https://github.com/iammikek/fortran-101) | 8008 | API-only | Fortran, fpm |
 | [java-101](https://github.com/iammikek/java-101) | 8009 | API-only | Spring Boot, JPA, Flyway |
-
+| [dotNet-101](https://github.com/iammikek/dotNet-101) | 8010 | API-only | ASP.NET Core, xUnit |
 \* go-101 also uses port 8000 — run one backend at a time, or change port in config.
 
 ### Other clients
