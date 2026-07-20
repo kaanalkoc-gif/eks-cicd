@@ -8,10 +8,10 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from alembic.config import Config
 from fastapi.testclient import TestClient
 
 from alembic import command
+from alembic.config import Config
 from app.database import SessionLocal
 from app.models import Category, Item, User
 from app.rate_limit import limiter
