@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
   packages: write
-
+  issues: write
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
   AWS_REGION: us-east-1
