@@ -75,7 +75,7 @@ jobs:
             "s|IMAGE_PLACEHOLDER|$IMAGE_NAME:${{ github.sha }}|g" \
             k8/deployment.yaml
 
-      - name: Deploy to EKS
+            - name: Deploy to EKS
         run: |
           kubectl apply -f k8/
 
@@ -83,7 +83,38 @@ jobs:
         run: |
           kubectl rollout status deployment/dummy-microservice --timeout=180s
 
+      - name: Wait for LoadBalancer
+        run: |
+          echo "Waiting for LoadBalancer..."
+
+          for i in {1..30}; do
+            LB_HOST=$(kubectl get svc dummy-microservice-service \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+            if [ -n "$LB_HOST" ]; then
+              echo "APP_URL=http://$LB_HOST" >> $GITHUB_ENV
+              echo "LoadBalancer ready: $LB_HOST"
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "LoadBalancer not ready"
+          exit 1
+
+      - name: Verify deployed application
+        run: |
+          curl --fail $APP_URL/health
+          curl --fail $APP_URL/
+
+      - name: OWASP ZAP Baseline DAST
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: ${{ env.APP_URL }}
+
       - name: Show Kubernetes resources
+        if: always()
         run: |
           kubectl get pods -o wide
           kubectl get services
