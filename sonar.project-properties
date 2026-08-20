@@ -1,0 +1,4 @@
+sonar.organization=kaanalkoc-gif
+sonar.projectKey=kaanalkoc-gif_eks-cicd
+sonar.sources=.
+sonar.exclusions=.git/**,.github/**,k8/**
