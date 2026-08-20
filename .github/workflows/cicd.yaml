@@ -75,7 +75,7 @@ jobs:
             "s|IMAGE_PLACEHOLDER|$IMAGE_NAME:${{ github.sha }}|g" \
             k8/deployment.yaml
 
-            - name: Deploy to EKS
+      - name: Deploy to EKS
         run: |
           kubectl apply -f k8/
 
@@ -92,11 +92,12 @@ jobs:
               -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
             if [ -n "$LB_HOST" ]; then
-              echo "APP_URL=http://$LB_HOST" >> $GITHUB_ENV
               echo "LoadBalancer ready: $LB_HOST"
+              echo "APP_URL=http://$LB_HOST" >> "$GITHUB_ENV"
               exit 0
             fi
 
+            echo "LoadBalancer is not ready yet..."
             sleep 10
           done
 
@@ -105,8 +106,9 @@ jobs:
 
       - name: Verify deployed application
         run: |
-          curl --fail $APP_URL/health
-          curl --fail $APP_URL/
+          echo "Testing $APP_URL"
+          curl --fail "$APP_URL/"
+          curl --fail "$APP_URL/health"
 
       - name: OWASP ZAP Baseline DAST
         uses: zaproxy/action-baseline@v0.15.0
