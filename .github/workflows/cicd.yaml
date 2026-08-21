@@ -9,6 +9,7 @@ permissions:
   contents: read
   packages: write
   issues: write
+
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
   AWS_REGION: us-east-1
@@ -44,7 +45,7 @@ jobs:
         run: |
           docker build -t $IMAGE_NAME:${{ github.sha }} .
 
-      # 5. Container'ı lokal olarak test et
+      # 5. Container'ı GitHub runner üzerinde test et
       - name: Test container
         run: |
           docker run -d --name test-app -p 8000:8000 $IMAGE_NAME:${{ github.sha }}
@@ -58,7 +59,7 @@ jobs:
         run: |
           docker push $IMAGE_NAME:${{ github.sha }}
 
-      # 7. AWS authentication
+      # 7. AWS'ye bağlan
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -71,26 +72,26 @@ jobs:
         run: |
           aws sts get-caller-identity
 
-      # 9. EKS kubeconfig oluştur
+      # 9. EKS bağlantısını oluştur
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region "$AWS_REGION" \
             --name "$EKS_CLUSTER_NAME"
 
-      # 10. Manifestteki image placeholder'ı yeni image ile değiştir
+      # 10. Deployment manifestine yeni Docker image'ı yerleştir
       - name: Update Kubernetes image
         run: |
           sed -i \
             "s|IMAGE_PLACEHOLDER|$IMAGE_NAME:${{ github.sha }}|g" \
             k8/deployment.yaml
 
-      # 11. EKS'e deploy et
+      # 11. Kubernetes manifestlerini EKS'e uygula
       - name: Deploy to EKS
         run: |
           kubectl apply -f k8/
 
-      # 12. Podların ayağa kalkmasını bekle
+      # 12. Yeni deployment'ın tamamlanmasını bekle
       - name: Wait for rollout
         run: |
           kubectl rollout status deployment/dummy-microservice --timeout=180s
@@ -118,7 +119,7 @@ jobs:
           kubectl get svc
           exit 1
 
-      # 14. AWS LoadBalancer DNS kaydının aktif olmasını bekle
+      # 14. LoadBalancer DNS kaydının aktif olmasını bekle
       - name: Wait for LoadBalancer DNS
         run: |
           echo "Waiting for DNS: $APP_URL"
@@ -139,46 +140,48 @@ jobs:
           echo "LoadBalancer DNS could not be resolved."
           exit 1
 
-      # 15. Gerçek uygulamanın cevap vermesini bekle
-      - name: Wait for deployed application
+      # 15. Uygulamanın stabil şekilde erişilebilir olduğunu doğrula
+      - name: Verify deployed application
         run: |
-          echo "Waiting for application: $APP_URL/health"
+          echo "Testing $APP_URL"
 
-          for i in {1..30}; do
+          SUCCESS=0
+
+          for i in {1..20}; do
             if curl \
+              --fail \
               --connect-timeout 5 \
               --max-time 10 \
-              --fail \
               "$APP_URL/health"; then
 
+              SUCCESS=$((SUCCESS + 1))
               echo ""
-              echo "Application is ready."
-              exit 0
+              echo "Successful health check: $SUCCESS/3"
+
+              if [ "$SUCCESS" -ge 3 ]; then
+                echo "Application is stable and ready for DAST."
+                exit 0
+              fi
+            else
+              SUCCESS=0
             fi
 
-            echo ""
-            echo "Application not ready yet..."
             sleep 10
           done
 
-          echo "Application did not become ready."
+          echo "Application is not stable enough for DAST."
           exit 1
 
-      # 16. Endpointleri son kez doğrula
-      - name: Verify deployed application
-        run: |
-          curl --fail --max-time 15 "$APP_URL/"
-          curl --fail --max-time 15 "$APP_URL/health"
-
-      # 17. DAST - OWASP ZAP
+      # 16. DAST - çalışan uygulamayı OWASP ZAP ile tara
       - name: OWASP ZAP Baseline DAST
         uses: zaproxy/action-baseline@v0.15.0
         with:
           target: ${{ env.APP_URL }}
 
-      # 18. Pipeline başarılı/başarısız olsa da cluster durumunu göster
+      # 17. Pipeline sonucu ne olursa olsun Kubernetes kaynaklarını göster
       - name: Show Kubernetes resources
         if: always()
         run: |
+          kubectl get deployment dummy-microservice -o wide
           kubectl get pods -o wide
           kubectl get services
