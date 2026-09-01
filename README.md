@@ -1,4 +1,4 @@
-# EKS CI/CD Pipeline
+ EKS CI/CD Pipeline
 
 Bu proje, basit bir FastAPI uygulamasının GitHub Actions kullanılarak otomatik olarak build, test ve deploy edilmesini sağlayan bir CI/CD pipeline çalışmasıdır. Pipeline içerisinde ayrıca SAST ve DAST güvenlik testleri bulunmaktadır.
 
